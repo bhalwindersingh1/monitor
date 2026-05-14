@@ -15,20 +15,23 @@
   let lastTitle = document.title;
 
   function send(title, body, priority = 'default') {
-    const now = Date.now();
-    if (now - lastNotified < DEBOUNCE_MS) return;
-    lastNotified = now;
+  const now = Date.now();
+  if (now - lastNotified < DEBOUNCE_MS) return;
+  lastNotified = now;
 
-    fetch(`${NTFY_SERVER}/${NTFY_TOPIC}`, {
-      method: 'POST',
-      headers: {
-        'Title':    title,
-        'Priority': priority,
-        'Tags':     'speech_balloon',
-      },
-      body: body,
-    }).catch(err => console.warn('[monitor] ntfy error:', err));
-  }
+  GM_xmlhttpRequest({
+    method: 'POST',
+    url: `${NTFY_SERVER}/${NTFY_TOPIC}`,
+    headers: {
+      'Title':        title,
+      'Priority':     priority,
+      'Tags':         'speech_balloon',
+      'Content-Type': 'text/plain',
+    },
+    data: body,
+    onerror: (err) => console.warn('[monitor] ntfy error:', err),
+  });
+}
 
   function getUnreadCount() {
     // WhatsApp Web stores unread count in the page title: "(3) WhatsApp"
