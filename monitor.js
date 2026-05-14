@@ -15,7 +15,7 @@
 
     try {
 
-        await fetch("https://ntfy.sh/mychromealerts", {
+        await fetch("https://ntfy.sh/mychromealerts0900", {
 
             method: "POST",
 
