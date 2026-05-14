@@ -1,4 +1,4 @@
-// wa-monitor.js  (host this file — see hosting options below)
+// monitor.js  (host this file — see hosting options below)
 
 (function () {
   'use strict';
@@ -27,7 +27,7 @@
         'Tags':     'speech_balloon',
       },
       body: body,
-    }).catch(err => console.warn('[wa-monitor] ntfy error:', err));
+    }).catch(err => console.warn('[monitor] ntfy error:', err));
   }
 
   function getUnreadCount() {
