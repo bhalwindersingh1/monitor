@@ -91,5 +91,5 @@
     if (!document.hidden) poll();
   });
 
-  console.log('[wa-monitor] loaded. Topic:', NTFY_TOPIC);
+  console.log('[monitor] loaded. Topic:', NTFY_TOPIC);
 })();
