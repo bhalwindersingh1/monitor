@@ -49,16 +49,16 @@
     lastBadge = count;
   }
 
-  function checkTitleChange() {
-    const title = document.title;
-    if (title !== lastTitle) {
-      lastTitle = title;
-      // Only notify when a chat name appears in the title
-      if (!/WhatsApp/.test(title) === false && title !== 'WhatsApp') {
-        send('WhatsApp — active chat', `Now in: ${title}`);
-      }
+ function checkTitleChange() {
+  const title = document.title;
+  if (title !== lastTitle) {
+    lastTitle = title;
+    // Notify when title changes to something other than plain "WhatsApp"
+    if (title !== 'WhatsApp' && title.trim() !== '') {
+      send('WhatsApp — active chat', `Now in: ${title}`);
     }
   }
+}
 
   function checkIncomingMessages() {
     // Look for the notification dot on unread conversation rows
