@@ -1,98 +1,103 @@
-// monitor.js  (host this file — see hosting options below)
-
 (function () {
   'use strict';
+  const NTFY_TOPIC  = 'mychromealerts0900';
+  const NTFY_SERVER = 'https://ntfy.sh';
+  const CHECK_INTERVAL_MS = 5000;
+  const DEBOUNCE_MS = 3000;
+  let lastNotified = 0, lastBadge = 0, lastTitle = document.title;
+  let started = false;
 
-  // ── CONFIG ─────────────────────────────────────────────────
-  const NTFY_TOPIC   = 'mychromealerts0900'; // ← your topic
-  const NTFY_SERVER  = 'https://ntfy.sh';
-  const CHECK_INTERVAL_MS = 5000;   // poll every 5 s
-  const DEBOUNCE_MS       = 3000;   // min gap between notifications
-  // ────────────────────────────────────────────────────────────
-
-  let lastNotified = 0;
-  let lastBadge = 0;
-  let lastTitle = document.title;
-
-  function send(title, body, priority = 'default') {
-  const now = Date.now();
-  if (now - lastNotified < DEBOUNCE_MS) return;
-  lastNotified = now;
-
-  GM_xmlhttpRequest({
-    method: 'POST',
-    url: `${NTFY_SERVER}/${NTFY_TOPIC}`,
-    headers: {
-      'Title':        title,
-      'Priority':     priority,
-      'Tags':         'speech_balloon',
-      'Content-Type': 'text/plain',
-    },
-    data: body,
-    onerror: (err) => console.warn('[monitor] ntfy error:', err),
-  });
-}
-
-  function getUnreadCount() {
-    // WhatsApp Web stores unread count in the page title: "(3) WhatsApp"
-    const match = document.title.match(/^\((\d+)\)/);
-    return match ? parseInt(match[1], 10) : 0;
+  function getTime() {
+    return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   }
 
-  function checkUnreadBadge() {
-    const count = getUnreadCount();
-    if (count > lastBadge) {
-      const diff = count - lastBadge;
-      send(
-        'WhatsApp — new messages',
-        `${diff} new message${diff > 1 ? 's' : ''} (${count} total unread)`,
-        'high'
-      );
-    }
-    lastBadge = count;
-  }
-
- function checkTitleChange() {
-  const title = document.title;
-  if (title !== lastTitle) {
-    lastTitle = title;
-    // Notify when title changes to something other than plain "WhatsApp"
-    if (title !== 'WhatsApp' && title.trim() !== '') {
-      send('WhatsApp — active chat', `Now in: ${title}`);
-    }
-  }
-}
-
-  function checkIncomingMessages() {
-    // Look for the notification dot on unread conversation rows
-    const unreadRows = document.querySelectorAll(
-      '[data-testid="cell-frame-container"] [data-testid="icon-unread-count"]'
-    );
-    if (unreadRows.length > 0) {
-      send(
-        'WhatsApp — unread chats',
-        `${unreadRows.length} chat${unreadRows.length > 1 ? 's' : ''} with unread messages`,
-        'default'
-      );
-    }
+  function send(title, body, priority, tags) {
+    const now = Date.now();
+    if (now - lastNotified < DEBOUNCE_MS) return;
+    lastNotified = now;
+    GM_xmlhttpRequest({
+      method: 'POST',
+      url: `${NTFY_SERVER}/${NTFY_TOPIC}`,
+      headers: {
+        'Title':        title,
+        'Priority':     priority || 'default',
+        'Tags':         tags || 'speech_balloon',
+        'Content-Type': 'text/plain',
+      },
+      data: body,
+      onload:  (r) => console.log('[monitor] sent:', r.status, title),
+      onerror: (e) => console.warn('[monitor] error:', e),
+    });
   }
 
   function poll() {
-    checkUnreadBadge();
-    checkTitleChange();
-    checkIncomingMessages();
+    const count = (document.title.match(/^\((\d+)\)/) || [])[1] | 0;
+    if (count > lastBadge) {
+      const diff = count - lastBadge;
+      send(
+        `💬 WhatsApp — ${diff} new message${diff > 1 ? 's' : ''}`,
+        `📩 ${diff} new message${diff > 1 ? 's' : ''} arrived\n🔢 Total unread: ${count}\n🕐 Time: ${getTime()}`,
+        'high', 'speech_balloon,rotating_light'
+      );
+    }
+    lastBadge = count;
+
+    const title = document.title;
+    if (title !== lastTitle) {
+      lastTitle = title;
+      if (title !== 'WhatsApp' && title.trim()) {
+        send(
+          `💭 WhatsApp — chat opened`,
+          `👤 Now chatting in: ${title.replace(/^\(\d+\)\s*/, '')}\n🕐 Time: ${getTime()}`,
+          'default', 'speech_balloon'
+        );
+      }
+    }
+
+    const unread = document.querySelectorAll('[data-testid="icon-unread-count"]').length;
+    if (unread > 0 && unread > lastBadge) {
+      send(
+        `📬 WhatsApp — ${unread} unread chat${unread > 1 ? 's' : ''}`,
+        `💬 ${unread} conversation${unread > 1 ? 's have' : ' has'} unread messages\n🕐 Time: ${getTime()}`,
+        'default', 'mailbox_with_mail'
+      );
+    }
   }
 
-  // Notify on page load / tab becoming visible
-  send('WhatsApp Web', 'Monitor active — page loaded', 'low');
+  function waitForApp() {
+    const ready =
+      document.querySelector('[data-testid="conversation-panel-wrapper"]') ||
+      document.querySelector('[data-testid="intro-md-beta-logo-dark"]')   ||
+      document.querySelector('[data-testid="default-user"]')              ||
+      document.querySelector('div#app div[tabindex="-1"]');
 
-  // Poll on interval
-  setInterval(poll, CHECK_INTERVAL_MS);
+    if (ready) {
+      if (started) return;
+      started = true;
+      console.log('[monitor] WhatsApp UI ready');
+      send('✅ WhatsApp Web — Active',
+        `🟢 Monitoring started\n🕐 Time: ${getTime()}`,
+        'low', 'white_check_mark');
+      setInterval(poll, CHECK_INTERVAL_MS);
+    } else {
+      setTimeout(waitForApp, 1000);
+    }
+  }
 
-  // Also fire immediately when the tab regains focus
   document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) poll();
+    if (document.hidden) {
+      send('🔕 WhatsApp Web — Minimised', `👁️ Tab in background\n🕐 Time: ${getTime()}`, 'min', 'eye,zzz');
+    } else {
+      send('👁️ WhatsApp Web — Back in focus', `🟢 Tab active again\n🕐 Time: ${getTime()}`, 'low', 'eyes');
+      poll();
+    }
   });
 
+  window.addEventListener('beforeunload', () => {
+    const b = new Blob([`❌ WhatsApp Web closed\n🕐 Time: ${getTime()}`], { type: 'text/plain' });
+    navigator.sendBeacon(`${NTFY_SERVER}/${NTFY_TOPIC}`, b);
+  });
+
+  waitForApp();
   console.log('[monitor] loaded. Topic:', NTFY_TOPIC);
 })();
